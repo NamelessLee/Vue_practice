@@ -49,7 +49,7 @@
               <input type="button" v-bind:class="{selected: flag=='ongoing'}" value="进行中" @click="flag='ongoing'">
               <input type="button" v-bind:class="{selected: flag=='completed'}" value="已完成" @click="flag='completed'">
               <span v-if="todos.length || recycleBin.length">
-                <input v-if="recycleBin.length" type="button" value="回收站" @click="flag='removed'"/>
+                <input v-if="recycleBin.length" type="button" v-bind:class="{selected: flag=='removed'}" value="回收站" @click="flag='removed'"/>
             </span>
             <br />
               <input type="button" v-if="filteredTodos.length && !this.isInBin" value="清除已完成" @click="clearCompleted">
