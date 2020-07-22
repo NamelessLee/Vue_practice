@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Vue Todo</title>
+         <style>
+            .completed {
+            text-decoration: line-through;
+            }
+ 
+            .selected {
+            color: red;
+            }
+
+            .empty{
+                border-color: red;
+            }    
+        </style>
+        <script src="../vue.js" type="text/javascript" charset="utf-8"></script>
+        <!-- 引入样式 -->
+        <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+        <!-- 引入组件库 -->
+        <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    </head>
+    <body>
+        <div id="todo-app">
+          <div>
+            <input type="button" value="全部标为完成" @click="markAllAsCompleted"/>
+            <input type="text" v-bind:class='{empty: emptyChecked}' placeholder="添加 todo" v-model="newTodoTitle" @keyup.enter="addTodo"/><span v-if="emptyChecked" style="color: red">请输入内容</span>
+          </div>
+          <ul>
+              <todo-item v-for="todo in filteredTodos"
+                            :todo="todo"
+                            :key="todo.id"
+                            @remove-todo="removeTodo"
+                            @restore-from-bin="restoreFromBin"/>
+          </ul>
+          <div v-if="hasRemovedTodo">
+              <br>
+              <input type="button" v-if="!this.isInBin" value="撤销" @click="restoreTodo()"/>
+          </div>
+          <!-- end todo list -->
+          <div>
+            <span v-if="leftTodosCount">剩余 {{leftTodosCount}} 项未完成 ---</span>
+            <span v-if="this.used && !leftTodosCount">全部完成, 你真是太棒了!( ´▽｀)🌸 </span>
+            <br />
+            <span>筛选：
+              <input type="button" v-bind:class="{selected: flag=='all'}" value="全部" @click="flag='all'">
+              <input type="button" v-bind:class="{selected: flag=='ongoing'}" value="进行中" @click="flag='ongoing'">
+              <input type="button" v-bind:class="{selected: flag=='completed'}" value="已完成" @click="flag='completed'">
+              <span v-if="todos.length || recycleBin.length">
+                <input v-if="recycleBin.length" type="button" v-bind:class="{selected: flag=='removed'}" value="回收站" @click="flag='removed'"/>
+            </span>
+            <br />
+              <input type="button" v-if="filteredTodos.length && !this.isInBin" value="清除已完成" @click="clearCompleted">
+              <input type="button" v-if="filteredTodos.length && !this.isInBin" value="清除全部" @click="clearAll">
+              <input type="button" v-if="this.recycleBin.length && this.isInBin" value="清空回收站" @click="clearBin">
+            </span>
+            
+          </div>
+        </div>
+        <script type="text/x-template" id="todo-item">
+            <!-- todo list -->
+            <li>
+                <span v-bind:class='{completed: todo.completed}' @dblclick="editTodo(todo)">{{ todo.title }}</span>
+                <input v-if="!todo.completed" type="button" value="标为完成" @click="markAsCompleted(todo)"/>
+                <input v-if="todo.completed" type="button" value="标为未完成" @click="markAsIncomplete(todo)"/>
+                <input v-if="todo.removed" type="button" value="还原" @click="restoreFromBin(todo)"/>
+                <input v-else="todo.removed" type="button" value="删除" @click="removeTodo(todo)">
+                <input type="text" value="编辑 todo..." v-if="editedTodo !==null && editedTodo.id===todo.id" v-model="todo.title" v-focus="true" @keyup.enter="editDone(todo)" @keyup.esc="cancelEdit(todo)"/>
+            </li>
+          </script>
+        <script>
+             //本地存储part
+            var STORAGE_KEY = 'vue2.x-todo-tutorial';
+            var todoStorage = {
+                fetch: function () {
+                    var todos = JSON.parse(localStorage.getItem(STORAGE_KEY)|| '[]');
+                    todos.forEach(function (todo,index){
+                        todo.id = index;
+                    });
+                    todoStorage.uid = todos.length;
+                    return todos
+                },
+                save: function (todos) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos))
+                }
+            };
+        </script>
+        <script>
+            Vue.component('todo-item', {
+                template: '#todo-item',
+                data: function () {
+                    return {
+                        editedTodo: null
+                    }
+                },
+                props: {
+                    todo: {
+                        type: Object,
+                        required: true,
+                    },
+                },
+                methods: {
+                    markAsCompleted: function (todo) {
+                        todo.completed = true
+                    },
+                    markAsIncomplete: function (todo) {
+                        todo.completed = false
+                    },
+                    removeTodo: function (todo) {
+                        this.$emit('remove-todo', todo);
+                    },
+                    editTodo: function (todo) {
+                        this.editedTodo = {id: todo.id, title: todo.title, completed: todo.completed}
+                    },
+                    editDone: function (todo) {
+                        if(todo.title.length==0){
+                            this.removeTodo(todo);
+                            this.removedTodo.todo = this.editedTodo;
+                            return;
+                        }
+                        this.editedTodo = null   
+                    },
+                    cancelEdit: function (todo) {
+                        todo.title = this.editedTodo.title;
+                        this.editedTodo = null
+                    },
+                    restoreFromBin: function (todo) {
+                        this.$emit('restore-from-bin',todo);
+                    },
+
+                },
+                directives: {
+                    focus: {
+                        inserted: function (el) {
+                            el.focus()
+                        }
+                    }
+                }
+            });
+        </script>
+        <script>
+            let id = 0;
+            var app = new Vue({
+                el:'#todo-app',
+                data: function() {
+                    return {
+                        todos: todoStorage.fetch(),
+                        newTodoTitle: '',
+                        checkEmpty: false,
+                        removedTodo: null,
+                        
+                        flag: 'all',
+                        used: false, //是否被使用过，刚进入时为false，待完成事项为0仍不显示”全部完成“
+                        recycleBin: [], //用于存放已经删除的todo
+                        isInBin: false
+                    }
+                },
+                //监测todos列表的变化，将变化存储到local storage
+                watch: {
+                    todos: {
+                        handler: function (todos) {
+                            todoStorage.save(todos)
+                        },
+                        deep: true
+                    }
+                },
+                methods: {
+                    addTodo: function () {
+                        if(this.newTodoTitle != ''){//不是空串
+                            this.todos.push({id: todoStorage.uid++, title: this.newTodoTitle, completed: false, removed: false});
+                            this.newTodoTitle = '',
+                            this.checkEmpty = false 
+                        }
+                        else this.checkEmpty = true                
+                    },
+                    
+                    
+                    removeTodo1: function (todo) {
+                        if(!confirm('确认删除？')){
+                            return
+                        }
+                        let removeTodo1 = this.todos.splice(this.todos.indexOf(todo),1)[0];
+                        removedTodo1.removed = true;
+                        this.recycleBin.unshift(removedTodo1);
+                    },
+
+                    removeTodo: function (todo) {
+                        let pos = this.todos.indexOf(todo);
+                        let removedTodo = this.todos.splice(pos, 1)[0];
+                        removedTodo.removed = true;
+                        this.recycleBin.unshift(removedTodo);
+                        this.removedTodo = {
+                            pos: pos,
+                            todo: removedTodo
+                        };
+                    },
+                    
+                    restoreTodo: function () {
+                        let todo = this.removedTodo.todo;
+                        let pos1 = this.removedTodo.pos;
+                        todo.removed = false;
+                        this.todos.splice(pos1,0,todo);
+                        let pos = this.recycleBin.indexOf(todo);
+                        this.recycleBin.splice(pos,1);
+                        this.removedTodo = null;
+                    },
+                    
+                    markAllAsCompleted: function () {
+                        this.todos.map(function (todo) {
+                            if (!todo.completed) {
+                                todo.completed = true
+                            }
+                        })
+                    },
+                    clearCompleted: function () {
+                        if(!confirm('确认清除已完成事项？')){
+                            return
+                        }
+                        this.completedTodos.map(todo => todo.removed = true);
+                        this.recycleBin.unshift(...this.completedTodos);
+                        this.todos = this.todos.filter(todo => !todo.completed)
+                    },
+                    clearAll: function () {
+                        if(!confirm('确认清除全部？')){
+                            return
+                        }
+                        this.todos.map(todo => todo.removed = true);
+                        this.recycleBin.unshift(...this.todos);
+                        this.todos = []
+                    },
+                    restoreFromBin: function (todo) {
+                        todo.removed = false;
+                        this.todos.unshift(todo);
+                        let pos = this.recycleBin.indexOf(todo);
+                        this.recycleBin.splice(pos,1);
+                        if(this.recycleBin.length==0) this.removedTodo=null;
+                    },
+                    clearBin: function () {
+                        if(confirm("确定清空回收站吗？")){
+                            this.recycleBin=[];
+                            this.removedTodo=null;
+                        }
+                    }
+                },
+                computed: {
+                    emptyChecked: function (){
+                        return this.newTodoTitle.length === 0 && this.checkEmpty
+                    },
+                    hasRemovedTodo: function(){
+                        return !!this.removedTodo
+                    },
+                    leftTodosCount: function () {
+                        return this.todos.filter(todo => !todo.completed).length;
+                    },
+                    leftTodos: function() {
+                        return this.todos.filter(todo => !todo.completed)
+                    },
+                    leftTodosCount: function () {
+                        if(this.leftTodos.length) this.used = true;
+                        return this.leftTodos.length
+                    },
+                    
+                    filteredTodos: function () {
+                        if (this.flag ==='ongoing') {
+                            this.isInBin = false;
+                            return this.leftTodos
+                        } else if (this.flag === 'completed') {
+                            this.isInBin = false;
+                            return this.todos.filter(todo => todo.completed)
+                        } else if (this.flag === 'removed') {
+                            this.isInBin = true;
+                            return this.recycleBin
+                        } else {
+                            this.isInBin = false;
+                            return this.todos;
+                        }
+                    },
+                    completedTodos: function () {
+                        return this.todos.filter(todo => todo.completed)
+                    }
+                    /*
+                    filteredTodos: function () {
+                        if (this.intention === 'ongoing') {
+                            return this.todos.filter(todo => !todo.completed)
+                        } else if (this.intention === 'completed') {
+                            return this.todos.filter(todo => todo.completed)
+                        } else {
+                            return this.todos
+                        }
+                    }
+                    */
+                },
+                directives: {
+                    focus: {
+                        inserted: function (el) {
+                            el.focus()
+                        }
+                    }
+                }
+            })
+        </script>
+        </body>
+</html>
