@@ -17,6 +17,10 @@
             }    
         </style>
         <script src="../vue.js" type="text/javascript" charset="utf-8"></script>
+        <!-- 引入样式 -->
+        <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+        <!-- 引入组件库 -->
+        <script src="https://unpkg.com/element-ui/lib/index.js"></script>
     </head>
     <body>
         <div id="todo-app">
@@ -42,7 +46,7 @@
           <!-- end todo list -->
           <div>
             <span v-if="leftTodosCount">剩余 {{leftTodosCount}} 项未完成 ---</span>
-            <span v-if="this.used && !leftTodosCount">全部完成, 你真是太棒了!( ´▽｀) </span>
+            <span v-if="this.used && !leftTodosCount">全部完成, 你真是太棒了!( ´▽｀)🌸 </span>
             <br />
             <span>筛选：
               <input type="button" v-bind:class="{selected: flag=='all'}" value="全部" @click="flag='all'">
@@ -59,14 +63,30 @@
             
           </div>
         </div>
-
+        <script>
+             //本地存储part
+            var STORAGE_KEY = 'vue2.x-todo-tutorial';
+            var todoStorage = {
+                fetch: function () {
+                    var todos = JSON.parse(localStorage.getItem(STORAGE_KEY)|| '[]');
+                    todos.forEach(function (todo,index){
+                        todo.id = index;
+                    });
+                    todoStorage.uid = todos.length;
+                    return todos
+                },
+                save: function (todos) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos))
+                }
+            };
+        </script>
         <script>
             let id = 0;
             var app = new Vue({
                 el:'#todo-app',
                 data: function() {
                     return {
-                        todos: [],
+                        todos: todoStorage.fetch(),
                         newTodoTitle: '',
                         checkEmpty: false,
                         removedTodo: null,
@@ -77,10 +97,19 @@
                         isInBin: false
                     }
                 },
+                //监测todos列表的变化，将变化存储到local storage
+                watch: {
+                    todos: {
+                        handler: function (todos) {
+                            todoStorage.save(todos)
+                        },
+                        deep: true
+                    }
+                },
                 methods: {
                     addTodo: function () {
                         if(this.newTodoTitle != ''){//不是空串
-                            this.todos.push({id: id++, title: this.newTodoTitle, completed: false, removed: false});
+                            this.todos.push({id: todoStorage.uid++, title: this.newTodoTitle, completed: false, removed: false});
                             this.newTodoTitle = '',
                             this.checkEmpty = false 
                         }
